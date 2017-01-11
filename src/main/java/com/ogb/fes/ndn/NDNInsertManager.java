@@ -3,40 +3,34 @@ package com.ogb.fes.ndn;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import com.ogb.fes.entity.ErrorResponse;
 import com.ogb.fes.filesystem.FileManager;
-import com.ogb.fes.service.GeoJSONProcessor;
 import com.ogb.fes.utils.DateTime;
-import com.ogb.fes.utils.GeoJSONContainer;
+import com.ogb.fes.utils.GeoJSON;
+import com.ogb.fes.utils.GeoJSONProcessor;
 
 
 public class NDNInsertManager {
-	//private        ExecutorService  executor;
 	private        ThreadPoolExecutor  executor;
 	
 	private static NDNInsertManager sharedInstance = null;
 
  
-    private NDNInsertManager() {
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+	private NDNInsertManager() {
     	super();
     	
     	//Allocate the threadpool
     	int nMaxThread=16;
-    	//executor = Executors.newFixedThreadPool(nMaxThread);
-    	//LinkedBlockingQueue queue=new LinkedBlockingQueue(16);
-    	
+  
     	executor = new ThreadPoolExecutor(nMaxThread, nMaxThread, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue(nMaxThread));
     	
     	//Resume incomplete work (check for existing files in upload-dir and manage it all)
@@ -86,7 +80,7 @@ public class NDNInsertManager {
     	}
     	return;
     }
-    public synchronized String processInsertContent(GeoJSONContainer geoJSONContainer, String userToken) {
+    public synchronized String processInsertContent(GeoJSON geoJSONContainer, String userToken) {
     	
     	//System.out.println(DateTime.currentTime()+"processInsertContent - Work For Content Added ");
     	
@@ -98,7 +92,7 @@ public class NDNInsertManager {
     	while (System.currentTimeMillis()<start+maxWaitTimeMillis) {
     		try {
         		executor.execute(createWorkContent(geoJSONContainer, userToken));
-        		return "success:"+geoJSONContainer.getObjID();
+        		return "success:"+geoJSONContainer.getOid();
         	}
     		catch (RejectedExecutionException e) {
     			try {
@@ -110,7 +104,7 @@ public class NDNInsertManager {
     			continue;
     		}
     	};
-    	return "error: system overloadred, try later";
+    	return "error: system overloaded, try later";
     	
     }	
 
@@ -126,8 +120,8 @@ public class NDNInsertManager {
 				{
 					NDNInsertResolver batchInsert = NDNInsertResolver.sharedInstance();
 					
-					GeoJSONContainer        geoJSONContainer = FileManager.getUploadFileContentGeoJSON(fileName,tid,uid,cid);
-					geoJSONContainer.computeObjID();
+					GeoJSON  geoJSONContainer = FileManager.getUploadFileContentGeoJSON(fileName,tid,uid,cid);
+					//geoJSONContainer.computeNonce();
 			    	if (geoJSONContainer.check() == false) {
 			    		createResFile("error:wrong geojson file", fileName);
 			    		return;
@@ -138,7 +132,8 @@ public class NDNInsertManager {
 					//the filename contains the token of the user
 					for (NDNContentObject ndnContentObject : contentList) 
 					{
-						batchInsert.addContent(ndnContentObject);
+						System.out.println("");
+						//batchInsert.addContent(ndnContentObject);
 						//System.out.println(DateTime.currentTime()+"processInsertFile - Inserting :" + ndnContentObject.getNameURI().toUri());
 					}
 					
@@ -147,7 +142,7 @@ public class NDNInsertManager {
 					}
 					
 					//Create temporary file for send back response to apache thread
-					createResFile("success:"+geoJSONContainer.getObjID(), fileName);
+					createResFile("success:"+geoJSONContainer.getOid(), fileName);
 					//System.out.println(DateTime.currentTime()+"processInsertFile - Work Completed!");
 				} 
 				catch (Exception e) 
@@ -160,7 +155,7 @@ public class NDNInsertManager {
 		return worker;
     }
     
-    private Runnable createWorkContent(final GeoJSONContainer geoJSONContainer, String userToken) {
+    private Runnable createWorkContent(final GeoJSON geoJSONContainer, String userToken) {
     	Runnable worker = new Runnable()  
     	{	
 			@Override
@@ -172,10 +167,11 @@ public class NDNInsertManager {
 					ArrayList<NDNContentObject> contentList = parser.getListOfNDNContentObjectsToInsert();
 					NDNInsertResolver batchInsert = NDNInsertResolver.sharedInstance();
 					//the filename contains the token of the user
+					//System.out.println("INSERT: "+ contentList.size());
 					for (NDNContentObject ndnContentObject : contentList) 
 					{
 						batchInsert.addContent(ndnContentObject);
-						//System.out.println(DateTime.currentTime()+"processInsertContent - Inserting :" + ndnContentObject.getNameURI().toUri());
+						//System.out.println("\t" + ndnContentObject.getNameURI().toUri());
 					}
 					
 					//System.out.println(DateTime.currentTime()+"processInsertContent - Work Completed!");

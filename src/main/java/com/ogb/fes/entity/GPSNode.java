@@ -46,7 +46,7 @@ public class GPSNode {
 	}
 	
 	
-	public void appendChild(GPSPoint point, int level) {
+	public synchronized void appendChild(GPSPoint point, int level) {
 		String key = Utils.gpsPointToNDNNname(point, false, false, currentLevel+1);
 		//System.out.println("Append Child " + key + " at level " + level +"\n");
 		GPSNode node = childs.get(key);
@@ -74,7 +74,7 @@ public class GPSNode {
 		}
 	}
 
-	public void aggregateOwnChildIfNeeded() {
+	public synchronized void aggregateOwnChildIfNeeded() {
 		
 		//Se il numero totale di nodi sottostanti è il massimo che posso contenere li aggrego
 		if (coveredNodeCount >= Math.pow(MAX_CHILD_NODE, MAX_TREE_DEEP-currentLevel) ) { 
@@ -83,7 +83,7 @@ public class GPSNode {
 		}
 	}
 	
-	public void removeOwnChild(GPSPoint point, int level) {
+	public synchronized void removeOwnChild(GPSPoint point, int level) {
 		//System.out.println("Point to remove: " + point + " at level " + level + " from currentLevel " + currentLevel);
 		if (level >= MAX_TREE_DEEP)
 			return;
@@ -105,14 +105,14 @@ public class GPSNode {
 		}	
 	}
 	
-	public void decreseSize(int value) {
+	public synchronized void decreseSize(int value) {
 		size = size - value;
 		
 		if (father != null)
 			father.decreseSize(value);
 	}
 	
-	public int getSize() {
+	public synchronized int getSize() {
 		return (size <= 0 ? 1 : size);
 	}
 	
@@ -350,8 +350,34 @@ public class GPSNode {
 				treeString += node.coveredArea.toString() + "\n";
 			}
 		}
+		
 		System.out.println(treeString);
 	}
+	
+	public ArrayList<Rectangle> aggregateThree(int maxTiles) {
+		
+		long tiles_100x100 = getNodesCountFullCoveredAtLevel(0);
+		if (tiles_100x100 > maxTiles) {
+			return getNodesRectAtLevel(0);
+		}
+
+		long tiles_10x10 = getNodesCountFullCoveredAtLevel(1);
+		if (tiles_10x10 > maxTiles) {
+			return getNodesRectAtLevel(1);
+		} 
+			
+		while (getSize() > maxTiles) {
+			if (getNodesCountAtLevel(1) + getNodesCountFullCoveredAtLevel(0) > maxTiles) {
+				aggregateBestCoveredAtLevel(0);
+			}
+			else {
+				aggregateBestCoveredAtLevel(1);
+			}		
+		}
+		
+		return getLeafArrayList();
+	}
+	
 	
 	@Override
 	public String toString() {
@@ -365,6 +391,7 @@ public class GPSNode {
 				}
 			}
 		}
+		
 		return treeString;
 	}
 

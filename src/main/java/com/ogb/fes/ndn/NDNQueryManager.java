@@ -55,6 +55,11 @@ public class NDNQueryManager {
 			reqeustsMap.put(currentUser, userRequestList);
 		}
 		
+//		//TODO Remove print for debug 
+//		System.out.println("REQUEST: "+ ndnRequestedNames.size());
+//		for (String req: ndnRequestedNames)
+//			System.out.println("\t"+ req);
+		
 		//Create a new thread for resolving user request
 		NDNQueryTileResolver ndnResolver = new NDNQueryTileResolver(ndnRequestedNames, serverIP);
 		ndnResolver.start();

@@ -8,6 +8,8 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
+import com.ogb.fes.entity.ErrorResponse;
+
 
 @Entity
 @Table(name="user")
@@ -28,6 +30,9 @@ public class User {
 	
 	@Column(name="key_locator")
 	private String keyLocator;
+	
+	@Column(name="permission_type")
+	private String permissionType;
 	
 	
 	public User() {
@@ -55,11 +60,12 @@ public class User {
 	public User(Map<String, Object> params) {
 		super();
 		
-		this.token      = (String)params.get("token");
-		this.userID     = (String)params.get("userID");
-		this.keyLocator = (String)params.get("keyLocator");
-		this.privateKey = ((String)params.get("privateKey")).getBytes();
-		this.publicKey  = ((String)params.get("publicKey")).getBytes();
+		this.token      	= (String)params.get("token");
+		this.userID     	= (String)params.get("userID");
+		this.keyLocator 	= (String)params.get("keyLocator");
+		this.privateKey 	= ((String)params.get("privateKey")).getBytes();
+		this.publicKey  	= ((String)params.get("publicKey")).getBytes();
+		this.permissionType = (String)params.get("permissionType");
 	}
 	
 	
@@ -79,6 +85,11 @@ public class User {
 	public byte[] getPublicKey() {
 		return publicKey;
 	}
+	public String getPermissionType() {
+		if (permissionType == null)
+			permissionType = "rw";
+		return permissionType;
+	}
 	
 	
 	public void setToken(String token) {
@@ -95,5 +106,26 @@ public class User {
 	}
 	public void setKeyLocator(String keyLocator) {
 		this.keyLocator = keyLocator;
+	}
+	public void setPermissionType(String permissionType) {
+		this.permissionType = permissionType;
+	}
+	
+	public boolean isSuperUser(){
+		if(this.getPermissionType().equals("superuser"))
+			return true;
+		return false;
+	}
+	
+	public boolean isAdmin(){
+		if(this.getPermissionType().equals("admin"))
+			return true;
+		return false;
+	}
+	
+	public boolean permissionCheck(){
+		if (this.getPermissionType().equals("rw") || this.isAdmin())
+			return true;
+		return false;
 	}
 }

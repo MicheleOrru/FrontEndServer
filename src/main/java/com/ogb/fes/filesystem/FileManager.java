@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashSet;
 
@@ -18,12 +17,11 @@ import org.springframework.core.io.Resource;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ogb.fes.utils.GeoJSON;
 import com.ogb.fes.utils.GeoJSONContainer;
 
-import net.named_data.jndn.Data;
 import net.named_data.jndn.security.KeyChain;
 import net.named_data.jndn.security.SecurityException;
-import net.named_data.jndn.security.ValidationRequest;
 import net.named_data.jndn.security.identity.IdentityManager;
 import net.named_data.jndn.security.policy.ConfigPolicyManager;
 
@@ -79,7 +77,7 @@ public class FileManager {
 		return new JSONObject(new String(bytes));
 	}
 	
-	public static GeoJSONContainer getUploadFileContentGeoJSON(String fileName,String tid, String uid, String cid)  {
+	public static GeoJSON getUploadFileContentGeoJSON(String fileName,String tid, String uid, String cid)  {
 		
 		return new GeoJSONContainer(getUploadFileContentJSONObjects(fileName),tid,uid,cid);
 	}
@@ -132,7 +130,7 @@ public class FileManager {
 			new File(CONFIG_DIR).mkdir();
 	}
 	
-	public void createDefaultConfigFile() {
+	public static void createDefaultConfigFile() {
 		String fileName = CONFIG_DIR + "/validator-config.conf.sample";
 		
 		try

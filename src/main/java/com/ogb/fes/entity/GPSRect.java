@@ -13,7 +13,7 @@ public class GPSRect
 {	
 	public GPSPoint northEst;
 	public GPSPoint southWest;
-	public boolean isInternal;
+	public boolean  isInternal;
 	
 	
 	//Default Contructor
@@ -220,7 +220,7 @@ public class GPSRect
 		roundSouthWest.setLatitudeAndFloorToDecimal(southWest.latitude, 1);
 		roundSouthWest.setLongitudeAndFloorToDecimal(southWest.longitude, 1);
 
-		northEst = roundNorthEst;
+		northEst  = roundNorthEst;
 		southWest = roundSouthWest;
 	}
 	public void adjustCoordTo100x100() {
@@ -352,8 +352,6 @@ public class GPSRect
 	
 	public GPSNode computeInnerTilesTree() {
 		//If the area is too big, calculate aprox innerTileThree (min res 10x10)
-		
-		
 		if (computeArea()*100*100 > 5000)
 			return computeInnerTilesTreeReduced10();
 		
@@ -420,16 +418,18 @@ public class GPSRect
 		adjustCoordTo1x1();
 		GPSNode headNode;
 		//System.out.println("***************** AreaRequested: " + computeArea()*100*100);
-		long maxTiles_10x10=estimateTiles10Count();
+		long maxTiles_10x10 = estimateTiles10Count();
 		//System.out.println("***************** AreaWithOnly10: " + 1.0*maxTiles_10x10*100);
 		
-		if ((1.0*maxTiles_10x10*100)/(1.0*computeArea()*100*100)<2) {
+		if ( (1.0*maxTiles_10x10*100)/(1.0*computeArea()*100*100) < 2 ) {
 			// performance optimization, do not attempt when using 10x10 stretch is lower than 0.3  
-			headNode =computeInnerTilesTreeReduced10();
+			headNode = computeInnerTilesTreeReduced10();
 			//System.out.println(DateTime.currentTime()+"Tessellation - using only 10x10, 100x100");
-			
-		} else headNode = computeInnerTilesTree();
-//		//headNode =computeInnerTilesTreeReduced10();
+		} 
+		else {
+			headNode = computeInnerTilesTree();
+		}
+  		//headNode = computeInnerTilesTreeReduced10();
 		//headNode = computeInnerTilesTree();
 		//System.out.println("Three: " + headNode);
 		
@@ -619,7 +619,7 @@ public class GPSRect
     }
     
     public GPSRect computeRelativeRect(float relValue) {
-    	GPSPoint ne = new GPSPoint(Utils.ceil10(northEst.latitude+relValue, 2),  Utils.ceil10(northEst.longitude+relValue, 2));
+    	GPSPoint ne = new GPSPoint(Utils.ceil10(northEst.latitude+relValue, 2),   Utils.ceil10(northEst.longitude+relValue, 2));
     	GPSPoint sw = new GPSPoint(Utils.floor10(southWest.latitude+relValue, 2), Utils.floor10(southWest.longitude+relValue, 2));
     	
     	return new GPSRect(ne, sw);

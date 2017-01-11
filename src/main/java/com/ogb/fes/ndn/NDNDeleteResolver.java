@@ -1,36 +1,27 @@
 package com.ogb.fes.ndn;
 
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 
-import com.ogb.fes.domain.User;
 import com.ogb.fes.utils.DateTime;
 
 import net.named_data.jndn.Data;
 import net.named_data.jndn.Face;
 import net.named_data.jndn.Interest;
-import net.named_data.jndn.KeyLocator;
 import net.named_data.jndn.Name;
 import net.named_data.jndn.OnData;
 import net.named_data.jndn.OnTimeout;
-import net.named_data.jndn.encoding.EncodingException;
 import net.named_data.jndn.security.KeyChain;
-import net.named_data.jndn.security.SecurityException;
-import net.named_data.jndn.security.identity.IdentityManager;
-import net.named_data.jndn.security.policy.ConfigPolicyManager;
-import net.named_data.jndn.util.Blob;
 
 
 public class NDNDeleteResolver extends Thread implements NDNResolver, OnData, OnTimeout {
 	private HashSet<String> contentBuffers;
 	private HashSet<String> ndnRequestNames;
 	
-	private KeyChain keyChain; 
-	private Name     keyLocator;
+	//private KeyChain keyChain; 
+	//private Name     keyLocator;
 	
 	private int  resultCount;
 	private int  requestTimeout;
@@ -53,8 +44,8 @@ public class NDNDeleteResolver extends Thread implements NDNResolver, OnData, On
 		this.contentBuffers  = new HashSet<String>();
 		this.ndnRequestNames = requestedNames;
 		
-		this.keyChain   = keyChain;
-		this.keyLocator = keyLocator;
+		//this.keyChain   = keyChain;
+		//this.keyLocator = keyLocator;
 		
 		this.interestSended    = 0;
 		this.inFlightFetcher   = 0;

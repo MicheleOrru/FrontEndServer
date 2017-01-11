@@ -32,6 +32,9 @@ public class UserService
 		System.out.println("registerUser " + params);
 		
 		Map<String, Object> result = registerOnAUCServer(params);
+		
+		System.out.println("result: "+result);
+		
 		if (result != null) {
 			response.setStatus(200);
 			return "";
@@ -42,7 +45,7 @@ public class UserService
 	}
 	
 	@CrossOrigin(origins="*")
-	@RequestMapping(method = RequestMethod.POST, value="/OGB//user/login", consumes="application/json", produces="application/json")
+	@RequestMapping(method = RequestMethod.POST, value="/OGB/user/login", consumes="application/json", produces="application/json")
     public Object login(HttpServletResponse response, @RequestBody Map<String, Object>params) {
 		System.out.println("LOGIN: " + params );
 		

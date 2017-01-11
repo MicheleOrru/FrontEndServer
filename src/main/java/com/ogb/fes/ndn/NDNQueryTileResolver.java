@@ -1,11 +1,17 @@
 package com.ogb.fes.ndn;
 
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Comparator;
 
+import com.ogb.fes.concurrent.LoopBodyArgs;
+import com.ogb.fes.concurrent.Parallel;
 import com.ogb.fes.entity.RangeQueryParams;
 import com.ogb.fes.utils.DateTime;
 
@@ -15,11 +21,11 @@ import net.named_data.jndn.Interest;
 import net.named_data.jndn.Name;
 import net.named_data.jndn.encoding.EncodingException;
 import net.named_data.jndn.util.Blob;
-import net.named_data.jndn.util.SegmentFetcher;
-import net.named_data.jndn.util.SegmentFetcher.ErrorCode;
+import net.named_data.jndn.util.FixedWindowSegmentFetcher;
+import net.named_data.jndn.util.FixedWindowSegmentFetcher.ErrorCode;
 
 
-public class NDNQueryTileResolver extends Thread implements NDNResolver, SegmentFetcher.OnComplete, SegmentFetcher.OnError {
+public class NDNQueryTileResolver extends Thread implements NDNResolver, FixedWindowSegmentFetcher.OnComplete, FixedWindowSegmentFetcher.OnError {
 	private HashSet<String> contentBuffers;
 	private HashSet<String> ndnRequestNames;
 	
@@ -27,11 +33,11 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 	private int  requestTimeout;
 	private Face face;
 	
-	private int     interestSended;
-	private int     inFlightFetcher;
+	private int     totalQuerySent;
+	private int     inFlightQueries;
 	private boolean eventProcessed;
-	private int     INTEREST_WINDOW;
-	private String serverIP;
+	private int     queryWindow;
+	//private String  serverIP;
 	
 	private long startTime = 0;
 	private long stopTime  = 0;
@@ -44,11 +50,11 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 		this.face            = new Face(serverIP);
 		this.contentBuffers  = new HashSet<String>();
 		this.ndnRequestNames = requestedNames;
-		this.serverIP = serverIP;
-		this.interestSended    = 0;
-		this.inFlightFetcher   = 0;
-		this.eventProcessed    = false;
-		this.INTEREST_WINDOW   = (RangeQueryParams.MAX_TILES>32 ? 32 : RangeQueryParams.MAX_TILES);
+		//this.serverIP        = serverIP;
+		this.totalQuerySent  = 0;
+		this.inFlightQueries = 0;
+		this.eventProcessed  = false;
+		this.queryWindow     = 4;   //(RangeQueryParams.MAX_TILES>32 ? 32 : RangeQueryParams.MAX_TILES);
 	}
 
 	
@@ -56,7 +62,7 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 	public void onComplete(Blob arg0) {
 		eventProcessed = true;
 		resultCount++;
-		inFlightFetcher--;
+		inFlightQueries--;
 		//long start1 = System.currentTimeMillis();
 		if (arg0.size() <= 1)
 			return;
@@ -86,7 +92,6 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 			Data data = getData(new Blob(contentRow));
 			//contentBuffers.put(data.getName().toUri(), data.getContent().buf());
 			contentBuffers.add( getStringElement(data.getContent().buf()) );
-			
 		}
 		//System.out.println("NDNResolver Tile - OnComplete Time Processing Elapsed: " + (System.currentTimeMillis()-start1)  + "ms"+" inFlight: "+inFlightFetcher);
 		//System.out.println("NDNResolver - OnComplete Time Elapsed: " + (stopTime-startTime) + "ms");
@@ -97,18 +102,16 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 	{
 		eventProcessed = true;
 		resultCount++;
-		inFlightFetcher--;
+		inFlightQueries--;
 		
 		//System.out.println("NDNResolver - Timeout data packet (" + resultCount + "/" + ndnRequestNames.size()+")");
-		System.out.println(DateTime.currentTime()+ "NDNResolver - Error " + arg0 + " for interest " + arg1);
-		
+		if(!arg1.contains("Network Nack"))
+			System.out.println(DateTime.currentTime()+ "NDNResolver - Error " + arg0 + " for interest " + arg1);
 		//System.out.println("NDNResolver - OnError Time Elapsed: " + (stopTime-startTime) + "ms");
 	}
 	
 	private Data getData(Blob b)
 	{
-		
-		
 		Data actualData = new Data();
 		actualData.setContent(b);
 		
@@ -122,28 +125,93 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 		
 		return actualData;
 	}
+
+	/*	
+	private void getElementsJNI(){
+		startTime = System.currentTimeMillis();
+
+		ArrayList<String> ndnRequestNameList = new ArrayList<String>(ndnRequestNames);
+		
+		Collections.sort(ndnRequestNameList, new Comparator<String>() {
+			@Override
+			public int compare(String o1, String o2) {
+				return o1.compareTo(o2);
+			}
+		});
+		
+		Parallel.For(0, ndnRequestNameList.size(), new LoopBodyArgs<Integer>() {
+			@Override
+			public void run() {	}
+
+			@Override
+			public void run(Integer i) {
+				//long start = System.currentTimeMillis();
+				
+				String reqName = ndnRequestNameList.get(i);
+				byte[] contentByte = new NDNChunkFetcher().fetchOne(8, reqName);
+				
+				if (contentByte.length > 2)
+					onComplete(new Blob(contentByte));
+				else
+					onError(ErrorCode.INTEREST_TIMEOUT, reqName);
+				
+				long stop = System.currentTimeMillis();
+				
+//				if ( (stop-start) > 0) {
+//					System.out.println("Elapsed Time " + (stop-start));
+//					System.out.println("Request " + reqName + "\n\n");
+//				}
+			}
+		});
+	}
 	
-	
-	
+	private void getElementsArrayJNI(){
+		startTime = System.currentTimeMillis();
+
+		ArrayList<String> ndnRequestNameList = new ArrayList<String>(ndnRequestNames);
+		String ndnRequestNamesArray[] = new String[ndnRequestNameList.size()];
+		for (int i = 0; i < ndnRequestNameList.size(); i++)
+			ndnRequestNamesArray[i] = ndnRequestNameList.get(i);
+		
+		byte[][] contentByte = new NDNChunkFetcher().fetch(8, ndnRequestNamesArray);
+		
+		for (int i = 0; i < contentByte.length; i++) {
+			if (contentByte.length > 2)
+				onComplete(new Blob(contentByte[i]));
+			else
+				onError(ErrorCode.INTEREST_TIMEOUT, ndnRequestNamesArray[i]);
+			
+			long stop = System.currentTimeMillis();
+		};
+	}
+	*/	
+
 	private void getElements() {
 		try {
 			startTime = System.currentTimeMillis();
 			
 			ArrayList<String> ndnRequestNameList = new ArrayList<String>(ndnRequestNames);
 			
+			Collections.sort(ndnRequestNameList, new Comparator<String>() {
+				@Override
+				public int compare(String o1, String o2) {
+					return o1.compareTo(o2);
+				}
+			});
+			
 			//System.out.println("Launching request listy for: " + ndnRequestNameList.size());
-			while (interestSended < ndnRequestNameList.size()) {
-				if (inFlightFetcher < INTEREST_WINDOW) {
-					String   reqName  = ndnRequestNameList.get(interestSended);
+			while (totalQuerySent < ndnRequestNameList.size()) {
+				if (inFlightQueries < queryWindow) {
+					String   reqName  = ndnRequestNameList.get(totalQuerySent);
 					Name     name     = new Name(reqName);
 					Interest interest = new Interest(name, requestTimeout);
 			
 					
-					SegmentFetcher.fetch(face, interest, SegmentFetcher.DontVerifySegment, this, this);
+					FixedWindowSegmentFetcher.fetch(face, interest, FixedWindowSegmentFetcher.DontVerifySegment, this, this);
 					//System.out.println("NDNResolver - Interest " +name.toUri());
 					
-					inFlightFetcher++;
-					interestSended++;
+					inFlightQueries++;
+					totalQuerySent++;
 					eventProcessed = false;
 				}
 				else {
@@ -222,7 +290,8 @@ public class NDNQueryTileResolver extends Thread implements NDNResolver, Segment
 	@Override
 	public void run() {
 		super.run();
-		
+		//getElementsArrayJNI();
+		//getElementsJNI();
 		getElements();
 	}
 }

@@ -118,6 +118,9 @@ public class Rectangle {
 		this.height = height;
 	}
 	
+	public GPSPoint computeGPSPoint() {
+		return new GPSPoint(x, y);
+	}
 	
 	public int computeResolution() {
 		adjustWidthAndHeight();

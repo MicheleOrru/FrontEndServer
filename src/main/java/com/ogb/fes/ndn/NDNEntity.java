@@ -1,33 +1,29 @@
 package com.ogb.fes.ndn;
 
+
 import java.util.ArrayList;
-import java.util.Random;
 
 import com.ogb.fes.entity.GPSPoint;
-import com.ogb.fes.utils.DateTime;
-import com.ogb.fes.utils.GeoJSONContainer;
+import com.ogb.fes.utils.GeoJSON;
 import com.ogb.fes.utils.Utils;
-
-import net.named_data.jndn.Name;
-import net.named_data.jndn.security.KeyChain;
-import net.named_data.jndn.security.SecurityException;
 
 
 public class NDNEntity
 {
 	public enum COMMANDS
 	{
+		TILE,
 		INSERT,
 		DELETE
 	}
 	
-	private GeoJSONContainer  geoJSON;
+	private GeoJSON geoJSON;
 	
 	private GPSPoint point;
 	private String   userID;
 	private String   tenantID;
-	private String   objID;
-	private String	 collectionId;
+	private String   nonce;
+	private String	 collectionID;
 	private String   reference;
 	private COMMANDS command;
 	
@@ -36,33 +32,43 @@ public class NDNEntity
 		super();
 	}
 
-	public NDNEntity(GeoJSONContainer geoJSONContainer, int pointIndex, String reference, COMMANDS command) {
+	public NDNEntity(GeoJSON geoJSONContainer, int pointIndex, String reference, COMMANDS command) {
 		this();
 
 	
 		this.point    	  = geoJSONContainer.getCoordinates().get(pointIndex);
 		this.userID   	  = geoJSONContainer.getUserID();
 		this.tenantID	  = geoJSONContainer.getTenantID();
-		this.objID    	  = geoJSONContainer.getObjID();
-		this.collectionId = geoJSONContainer.getCollectionID();
+		this.nonce    	  = geoJSONContainer.getNonce();
+		this.collectionID = geoJSONContainer.getCollectionID();
 		
-		this.reference    = reference;
+		this.setReference(reference);
 		this.command  	  = command;
-		this.geoJSON      = geoJSONContainer;
+		this.setGeoJSON(geoJSONContainer);
 	}
 
 	
 	public String getDataName(int zoomLevel) {
 		
-		String prefix = Utils.gpsPointToNDNNname(point, zoomLevel, Utils.Format.LAT_LONG);
-		String res    = "/OGB"+prefix+"/GPS_id/DATA/"+tenantID+"/"+collectionId+"/"+userID+"/"+objID;
+		String prefix = Utils.gpsPointToNDNNname(point, zoomLevel, Utils.Format.LONG_LAT);
+		String res    = "";
 		
 		switch (command) {
+			case TILE:
+				String ndnListPrefix      = "/OGB" + prefix + "/GPS_id/TILE"; 
+				String ndnDataRequestName = "/OGB" + prefix + "/GPS_id/DATA/" + tenantID + "/" + collectionID;
+				res = ndnListPrefix + ndnDataRequestName;
+				res = res + "/" + res.hashCode();
+				break;
+				
 			case INSERT:
+				res = "/OGB"+prefix+"/GPS_id/DATA/" + tenantID + "/" + collectionID + "/" + userID + "/" + nonce;
 				break;
+				
 			case DELETE:
-				res =  "/OGB"+prefix+"/GPS_id/DELETE"+res;
+				res = "/OGB"+prefix+"/GPS_id/DELETE/OGB"+prefix+"/GPS_id/DATA/" + tenantID + "/" + collectionID + "/" + userID + "/" + nonce;
 				break;
+				
 			default:
 				break;
 		}
@@ -85,8 +91,8 @@ public class NDNEntity
 	
 	public String getGeoJSONName()
 	{
-		String prefix = Utils.gpsPointToNDNNname(point, 2, Utils.Format.LAT_LONG);
-		String res    = "/OGB"+prefix+"/GPS_id/GEOJSON/"+tenantID+"/"+collectionId+"/"+userID+"/"+objID;
+		String prefix = Utils.gpsPointToNDNNname(point, 2, Utils.Format.LONG_LAT);
+		String res    = "/OGB"+prefix+"/GPS_id/GEOJSON/"+tenantID+"/"+collectionID+"/"+userID+"/"+nonce;
 		
 		return res;
 	}
@@ -105,9 +111,9 @@ public class NDNEntity
 	public int hashCode() {
 		final int prime = 31;
 		int result = 1;
-		result = prime * result + ((collectionId == null) ? 0 : collectionId.hashCode());
+		result = prime * result + ((collectionID == null) ? 0 : collectionID.hashCode());
 		result = prime * result + ((command == null) ? 0 : command.hashCode());
-		result = prime * result + ((objID == null) ? 0 : objID.hashCode());
+		result = prime * result + ((nonce == null) ? 0 : nonce.hashCode());
 		result = prime * result + ((point == null) ? 0 : point.hashCode());
 		result = prime * result + ((tenantID == null) ? 0 : tenantID.hashCode());
 		result = prime * result + ((userID == null) ? 0 : userID.hashCode());
@@ -125,10 +131,10 @@ public class NDNEntity
 		NDNEntity other = (NDNEntity) obj;
 		if (command != other.command)
 			return false;
-		if (objID == null) {
-			if (other.objID != null)
+		if (nonce == null) {
+			if (other.nonce != null)
 				return false;
-		} else if (!objID.equals(other.objID))
+		} else if (!nonce.equals(other.nonce))
 			return false;
 		if (point == null) {
 			if (other.point != null)
@@ -140,10 +146,10 @@ public class NDNEntity
 				return false;
 		} else if (!tenantID.equals(other.tenantID))
 			return false;
-		if (collectionId == null) {
-			if (other.collectionId != null)
+		if (collectionID == null) {
+			if (other.collectionID != null)
 				return false;
-		} else if (!collectionId.equals(other.collectionId))
+		} else if (!collectionID.equals(other.collectionID))
 			return false;
 		if (userID == null) {
 			if (other.userID != null)
@@ -151,5 +157,21 @@ public class NDNEntity
 		} else if (!userID.equals(other.userID))
 			return false;
 		return true;
+	}
+
+	public GeoJSON getGeoJSON() {
+		return geoJSON;
+	}
+
+	public void setGeoJSON(GeoJSON geoJSON) {
+		this.geoJSON = geoJSON;
+	}
+
+	public String getReference() {
+		return reference;
+	}
+
+	public void setReference(String reference) {
+		this.reference = reference;
 	}
 }

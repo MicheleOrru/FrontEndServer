@@ -1,12 +1,10 @@
 package com.ogb.fes.ndn;
 
 
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-import net.named_data.jndn.KeyLocator;
 import net.named_data.jndn.Name;
 import net.named_data.jndn.security.KeyChain;
 

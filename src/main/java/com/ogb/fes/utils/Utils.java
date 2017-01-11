@@ -7,7 +7,6 @@ import java.util.regex.Pattern;
 
 import com.ogb.fes.entity.GPSPoint;
 import com.ogb.fes.entity.GPSRect;
-import com.ogb.fes.ndn.NDNEntity.COMMANDS;
 
 
 public class Utils {
@@ -18,7 +17,11 @@ public class Utils {
 	
 	//NDN Utilities functions
 	public static String[] toStringsForNDNname(double number) {
-		String res = String.format("%06.2f", number);
+		String res;
+		if (number < 0.0f)
+			res = String.format("%07.2f", number);
+		else
+			res = String.format("%06.2f", number);
 		String result[] = new String[3];
 		
 		String parts[] = res.split(Pattern.quote("."));
@@ -50,7 +53,7 @@ public class Utils {
 	}
 	
 	public static String gpsRectToNDNName(GPSRect rect, int precision) {
-		return gpsRectToNDNName(rect, precision, Format.LAT_LONG);
+		return gpsRectToNDNName(rect, precision, Format.LONG_LAT);
 	}
 	
 	public static String gpsRectToNDNName(GPSRect rect, int precision, Utils.Format format) {
@@ -67,6 +70,8 @@ public class Utils {
 			needSign_lng = (point.longitude >= 0.0 ? true : false);
 		}
 		
+	//	System.out.println("gpsRectToNDNName: point = " + point);
+		
 		return Utils.gpsPointToNDNNname(point, needSign_lat, needSign_lng, precision, format);
 	}
 	
@@ -75,7 +80,7 @@ public class Utils {
 	}
 	
 	public static String gpsPointToNDNNname(GPSPoint point, boolean needSign_lat, boolean needSign_lng,  int precision) {
-		return gpsPointToNDNNname(point, needSign_lat, needSign_lng, precision, Format.LAT_LONG);
+		return gpsPointToNDNNname(point, needSign_lat, needSign_lng, precision, Format.LONG_LAT);
 	}
 	public static String gpsPointToNDNNname(GPSPoint point, boolean needSign_lat, boolean needSign_lng, int precision, Utils.Format format) {
 		String latitudeString[]  = Utils.toStringsForNDNname(point.getLatitude());
@@ -98,23 +103,23 @@ public class Utils {
 		return result;
 	}
 	
-	public static String referredNDNNameForGeoJSON(GeoJSONContainer geoJSON) {
-		GPSPoint point  = geoJSON.getCoordinates().get(0);
-		int zoomLevel   = 0;
-		String tenantID = geoJSON.getTenantID();
-		String userID   = geoJSON.getUserID();
-		String objID    = geoJSON.getObjID();
-		String cID 		= geoJSON.getCollectionID();
-		
-		String prefix = Utils.gpsPointToNDNNname(point, zoomLevel, Utils.Format.LAT_LONG);
-		String res = "/OGB"+prefix+"/GPS_id/DATA/"+tenantID+"/"+cID+"/"+userID+"/"+objID;
-		
-		return res;
-	}	
+//	public static String referredNDNNameForGeoJSON(GeoJSONContainer geoJSON) {
+//		GPSPoint point  = geoJSON.getCoordinates().get(0);
+//		int zoomLevel   = 0;
+//		String tenantID = geoJSON.getTenantID();
+//		String userID   = geoJSON.getUserID();
+//		String objID    = geoJSON.getNonce();
+//		String cID 		= geoJSON.getCollectionID();
+//		
+//		String prefix = Utils.gpsPointToNDNNname(point, zoomLevel, Utils.Format.LONG_LAT);
+//		String res = "/OGB"+prefix+"/GPS_id/DATA/"+tenantID+"/"+cID+"/"+userID+"/"+objID;
+//		
+//		return res;
+//	}	
 	
 	
 	public static Rectangle rectFromNDNName(String ndnName) {
-		return rectFromNDNName(ndnName, Format.LAT_LONG);
+		return rectFromNDNName(ndnName, Format.LONG_LAT);
 	}
 	public static Rectangle rectFromNDNName(String ndnName, Utils.Format format) {
 		ndnName = ndnName.split("/GPS_id/DATA/")[0];
@@ -190,8 +195,8 @@ public class Utils {
 			stringNum = new BigDecimal(String.valueOf(number)).setScale(decimal, BigDecimal.ROUND_FLOOR).toString();
 		}
 		else {
-			number -= 0.000001; //For fixing the double precision error 
-			stringNum = new BigDecimal(String.valueOf(number)).setScale(decimal, BigDecimal.ROUND_CEILING).toString();
+			number += 0.000001; //For fixing the double precision error 
+			stringNum = new BigDecimal(String.valueOf(number)).setScale(decimal, BigDecimal.ROUND_FLOOR).toString();
 		}
 		//System.out.println("Floor To Decimal: " + decimal + "   " + number + " --> " + Double.parseDouble(stringNum));
 		return Double.parseDouble(stringNum);
@@ -205,8 +210,8 @@ public class Utils {
     		stringNum = new BigDecimal(String.valueOf(number)).setScale(decimal, BigDecimal.ROUND_CEILING).toString();
     	}
     	else{
-    		number += 0.000001; //For fixing the double precision error 
-    		stringNum = new BigDecimal(String.valueOf(number)).setScale(decimal, BigDecimal.ROUND_FLOOR).toString();
+    		number -= 0.000001; //For fixing the double precision error 
+    		stringNum = new BigDecimal(String.valueOf(number)).setScale(decimal, BigDecimal.ROUND_CEILING).toString();
     	}
     	//System.out.println("Ceil To Decimal: " + decimal + "   " + number + " --> " + Double.parseDouble(stringNum));
 		return Double.parseDouble(stringNum);

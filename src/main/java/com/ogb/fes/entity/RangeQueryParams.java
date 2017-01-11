@@ -1,11 +1,18 @@
 package com.ogb.fes.entity;
 
 
+import java.awt.color.CMMException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
+import org.json.JSONException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.ogb.fes.ndn.NDNEntity.COMMANDS;
+import com.ogb.fes.utils.DateTime;
+import com.ogb.fes.utils.GeoJSONQuery;
 import com.ogb.fes.utils.Rectangle;
 import com.ogb.fes.utils.Utils;
 import com.ogb.fes.utils.Utils.Format;
@@ -13,28 +20,33 @@ import com.ogb.fes.utils.Utils.Format;
 
 public class RangeQueryParams 
 {
-	public static int MAX_TILES = 80;
+	public static int MAX_TILES  = 80;
+	public static int MIN_TILES  = 10;
+	public static int STEP_TILES = 10;
 
 	public String              tid, cid, uid;
 	public ArrayList<String>   requestedProperties;
 	public String              queryFunction;
 	public String              queryType;
-	public ArrayList<GPSPoint> coordinatesPoint;
+	
+	public ArrayList<ArrayList<GPSPoint>> coordinatesPolygonPoint; //Used for handle queryType == Polygon
+	public ArrayList<GPSPoint>            coordinatesBoxPoint;     //Used for handle queryType == Box
 
+	private HashMap<String, Object> hashMapParamas;
 
 	public RangeQueryParams() {
 		super();
 
-
 	}
 
+	@SuppressWarnings("unchecked")
 	public boolean setParams(HashMap<String, Object> params, String tid, String uid, String cid) {
-
 
 		this.tid = tid;
 		this.cid = cid;
 		this.uid = uid;
-
+		this.hashMapParamas = params;
+		
 		requestedProperties = new ArrayList<String>();
 		if (params.containsKey("$select") == true) 
 		{
@@ -47,43 +59,52 @@ public class RangeQueryParams
 		{
 			//System.out.println("Retrive geometry Success!");
 
-			@SuppressWarnings("unchecked")
 			HashMap<String, Object> locationField = (HashMap<String, Object>)params.get("geometry");
 			if (locationField.containsKey("$geoIntersects") == true)
 			{
 				queryFunction = "$geoIntersects";
 				//System.out.println("Retrive $geoIntersects Success!");
-				
-				@SuppressWarnings("unchecked")
+
 				HashMap<String, Object> functionField = (HashMap<String, Object>)locationField.get("$geoIntersects");
 				if (functionField.containsKey("$geometry") == true)
 				{
 					//System.out.println("Retrive $geometry Success!");
-					
-					@SuppressWarnings("unchecked")
 					HashMap<String, Object> geometry = (HashMap<String, Object>)functionField.get("$geometry");
+					
+					queryType = (String)geometry.get("type");
 
-					queryType        = (String)geometry.get("type");
-					coordinatesPoint = new ArrayList<GPSPoint>();
-					for (List<Double> coord: (List<List<Double>>)geometry.get("coordinates")) {
-						coordinatesPoint.add(new GPSPoint(coord.get(1), coord.get(0)));
+					if (queryType.compareToIgnoreCase("Box") == 0) {
+						coordinatesBoxPoint = new ArrayList<GPSPoint>();
+						for (List<Double> coord: (List<List<Double>>)geometry.get("coordinates")) {
+							coordinatesBoxPoint.add(new GPSPoint(coord.get(1), coord.get(0)));
+						}
+					}
+					else if (queryType.compareToIgnoreCase("Polygon") == 0) {
+						coordinatesPolygonPoint = new ArrayList<ArrayList<GPSPoint>>();
+						for (List<List<Double>> coord: (List<List<List<Double>>>)geometry.get("coordinates")) {
+							ArrayList<GPSPoint> polyg = new ArrayList<>();
+							for (List<Double> singleCoord: coord) {
+								polyg.add(new GPSPoint(singleCoord.get(1), singleCoord.get(0)));
+							}
+							coordinatesPolygonPoint.add(polyg);
+						}
 					}
 
 					return true;
 				}
 				else
 				{
-					System.out.println("Retrive $geometry Error!");
+					System.out.println(DateTime.currentTime() +" RangeQueryParams - Retrive $geometry Error!");
 				}
 			}
 			else
 			{
-				System.out.println("Retrive $geoIntersects Error!");
+				System.out.println(DateTime.currentTime() +" RangeQueryParams - Retrive $geoIntersects Error!");
 			}
 		}
 		else
 		{
-			System.out.println("Retrive geometry Error!");
+			System.out.println(DateTime.currentTime() +" RangeQueryParams - Retrive geometry Error!");
 		}
 
 		return false;
@@ -100,42 +121,87 @@ public class RangeQueryParams
 
 	private HashSet<String> tessellationIntersect(ServiceStats stats) {
 
+		//System.out.println(DateTime.currentTime() + "RangeQueryParams - tessellationIntersect: queryType: " + queryType );
+		
 		if (queryType.compareToIgnoreCase("Box") == 0) {
 			return tessellationIntersectBox(stats);
+		}
+		else if (queryType.compareToIgnoreCase("Polygon") == 0) {
+			try {
+				return tessellationIntersectPolygon(stats);
+			}
+			catch (Exception e) {
+				return new HashSet<String>();
+			}
 		}
 
 		return new HashSet<String>();
 	}
 
+	private HashSet<String> tessellationIntersectPolygon(ServiceStats stats) throws JSONException, JsonProcessingException  {
+		double          startTime;
+		double          stopTime;
+		HashSet<String> tileNames    = new HashSet<String>();
+		GeoJSONQuery    geoJSONQuery = new GeoJSONQuery(hashMapParamas, tid, uid, cid);
+		
+		//Storing request area to stats object
+		stats.setRequestArea(geoJSONQuery.computeArea());
+		
+		startTime = System.nanoTime();
+		ArrayList<Rectangle> tilesRect = new ArrayList<Rectangle>();
+		for (int m=MIN_TILES;m<=MAX_TILES;m=m+STEP_TILES) {
+			tilesRect = geoJSONQuery.computeTilesConteined(COMMANDS.TILE, m);
+			if ((computeResponseSquareArea(tilesRect))<2*stats.getRequestArea())
+				break;
+		}
+		
+		stopTime = System.nanoTime();
+		
+		stats.setTilesComputedTime(stopTime-startTime);
+		
+		//Storing optimal cover computation time (in millisecond)
+		stats.setTilesComputedTime((stopTime-startTime)/1e6);
+
+		//Storing tilesRect area to stats object
+		stats.setResponseArea(computeResponseSquareArea(tilesRect));
+
+		//Storing the tilesRect count
+		stats.setTilesCount(tilesRect.size());
+		
+		for (Rectangle rect : tilesRect) {
+			tileNames.add(geoJSONQuery.getCommandName(rect.computeGPSPoint(), rect.computeResolution(), COMMANDS.TILE));
+		}
+		
+		//Storing the tilesRect count
+		stats.setTilesCount(tileNames.size());
+
+		return tileNames;
+	}
+	
 	private HashSet<String> tessellationIntersectBox(ServiceStats stats) {
 
-		GPSRect roundedRect    = new GPSRect(coordinatesPoint.get(1), coordinatesPoint.get(0));
+		GPSRect roundedRect    = new GPSRect(coordinatesBoxPoint.get(1), coordinatesBoxPoint.get(0));
 		int     resolution     = 2;
 		int     relativeOffset = 1000;
 
 		double startTime;
 		double stopTime;
 
-
 		startTime = System.nanoTime();
-		//System.out.println(DateTime.currentTime()+"RangeQuery - RectBound:  " + roundedRect);
-		//System.out.println(DateTime.currentTime()+"RangeQuery - Resolution: " + resolution);
-		//System.out.println(DateTime.currentTime()+"RangeQuery - MaxTiles:   " + MAX_TILES+"\n");
 
 		//Storing request area to stats object
 		stats.setRequestArea(roundedRect.computeArea()*100*100);
 		ArrayList<Rectangle> tilesRect = new ArrayList<Rectangle>();		
-		//System.out.println(DateTime.currentTime()+"RangeQuery - Before RoundedRect: " + roundedRect);
 		roundedRect = roundedRect.computeRelativeRect(relativeOffset);
-		//stopTime = System.nanoTime();
-		//System.out.println(DateTime.currentTime()+"RangeQuery - After RoundedRect: " + roundedRect + " - Time: " + (stopTime-startTime)/1e6 +"s\n");
-
-		//startTime = System.nanoTime();
-		//System.out.println(DateTime.currentTime()+"RangeQuery - Before OptimalCover");
-		tilesRect = restoreToOriginCoordinate(roundedRect.computeOptimalCoverTree(MAX_TILES), relativeOffset);
+		
+		for (int m=MIN_TILES;m<=MAX_TILES;m=m+STEP_TILES) {
+			tilesRect = restoreToOriginCoordinate(roundedRect.computeOptimalCoverTree(m), relativeOffset);
+			if ((computeResponseSquareArea(tilesRect))<2*stats.getRequestArea())
+				break;
+		}
+		
 		stopTime = System.nanoTime();
-		//System.out.println(DateTime.currentTime()+"RangeQuery - After OptimalCover Tiles Count: "+tilesRect.size() + " - Time: " + (stopTime-startTime)/1e9 +" s\n");
-
+		
 		//Storing optimal cover computation time (in millisecond)
 		stats.setTilesComputedTime((stopTime-startTime)/1e6);
 
@@ -149,16 +215,17 @@ public class RangeQueryParams
 
 		HashSet<String>    tileNames    = new HashSet<String>();
 		ArrayList<GPSRect> tilesGPSRect = new ArrayList<GPSRect>();
-		Rectangle queryRect = new Rectangle(new GPSRect(coordinatesPoint.get(1), coordinatesPoint.get(0)));
+		//Rectangle          queryRect    = new Rectangle(new GPSRect(coordinatesBoxPoint.get(1), coordinatesBoxPoint.get(0)));
 		for (Rectangle rect : tilesRect) {
 			GPSRect gpsRect = rect.toGPSRect();
 			//System.out.println("Intersection area:" + rect.computeIntersectionAreaPercentage(new Rectangle(new GPSRect(coordinatesPoint.get(1), coordinatesPoint.get(0)))));
-			if (rect.computeIntersectionAreaPercentage(queryRect)>0.7) {
-				gpsRect.setInternal(true);
-			} else {
-				gpsRect.setInternal(false);
-			}
-
+			// Repo side range query temporary disabled since not yet supported 
+//			if (rect.computeIntersectionAreaPercentage(queryRect)>0.7) {
+//				gpsRect.setInternal(true);
+//			} else {
+//				gpsRect.setInternal(false);
+//			}
+			gpsRect.setInternal(true);
 
 			resolution = rect.computeResolution();
 			tilesGPSRect.add(gpsRect);
@@ -173,11 +240,12 @@ public class RangeQueryParams
 			String ndnDataRequestName = "/OGB" + gps_id + "/GPS_id/DATA/" + tid + "/" + cid;
 			ndnDataRequestName = ndnListPrefix + ndnDataRequestName;
 
+			/*
 			if (!gpsRect.isInternal && resolution<1) {
-				String ndnQueryName = "/QUERY/"+coordinatesPoint.get(0).longitude+"/"+coordinatesPoint.get(0).latitude
-						+ "/" + coordinatesPoint.get(1).longitude + "/" + coordinatesPoint.get(1).latitude;
+				String ndnQueryName = "/QUERY/"+coordinatesBoxPoint.get(0).longitude+"/"+coordinatesBoxPoint.get(0).latitude + "/" + coordinatesBoxPoint.get(1).longitude + "/" + coordinatesBoxPoint.get(1).latitude;
 				ndnDataRequestName +=ndnQueryName;
 			}
+			*/
 			//Add the hash code to make unique the ndn name (wrong cache issue)
 			ndnDataRequestName += "/"+ndnDataRequestName.hashCode();
 
@@ -215,6 +283,6 @@ public class RangeQueryParams
 
 	@Override
 	public String toString() {
-		return "RangeQuery [Function=" + queryFunction + ", Type=" + queryType + ", Coordinates=" + coordinatesPoint+"]";
+		return "RangeQuery [Function=" + queryFunction + ", Type=" + queryType + ", Coordinates=" + coordinatesBoxPoint+"]";
 	}
 }

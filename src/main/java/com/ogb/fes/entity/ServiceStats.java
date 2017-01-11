@@ -102,9 +102,7 @@ public class ServiceStats {
 	@Override
 	public String toString() {
 		return "ServiceStats [requestTime=" + requestTimeMillis + ", postProcessingTime=" + postProcessingTime + ", tilesComputedTime=" + tilesComputedTime + ", ndnRequestTime=" + ndnRequestTime
-				+ ", bloomFilterRequestTime=" + bloomFilterRequestTime + ", tilesCount=" + tilesCount
-				+ ", tilesWithDataCount=" + tilesWithDataCount + ", requestArea=" + requestArea + ", responseArea="
-				+ responseArea + "]";
+				+ ", tilesCount=" + tilesCount + ", requestArea=" + requestArea + ", responseArea="+ responseArea + "]";
 	}
 
 	
